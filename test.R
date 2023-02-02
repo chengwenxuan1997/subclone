@@ -1,4 +1,4 @@
-bat <- function(analysis = "paired", tumourname, normalname, tumour_data_file, 
+bbat <- function(analysis = "paired", tumourname, normalname, tumour_data_file, 
                 normal_data_file, imputeinfofile, g1000prefix, problemloci, 
                 gccorrectprefix = NULL, repliccorrectprefix = NULL, g1000allelesprefix = NA, 
                 ismale = NA, data_type = "wgs", impute_exe = "impute2", 
@@ -17,73 +17,8 @@ bat <- function(analysis = "paired", tumourname, normalname, tumour_data_file,
                 snp6_reference_info_file = NA, apt.probeset.genotype.exe = "apt-probeset-genotype", 
                 apt.probeset.summarize.exe = "apt-probeset-summarize", norm.geno.clust.exe = "normalize_affy_geno_cluster.pl", 
                 birdseed_report_file = "birdseed.report.txt", heterozygousFilter = "none", 
-                prior_breakpoints_file = NULL, GENOMEBUILD = "hg19", chrom_coord_file = NULL){
-  requireNamespace("foreach")
-  requireNamespace("doParallel")
-  requireNamespace("parallel")
-  if (analysis == "cell_line") {
-    calc_seg_baf_option = 1
-    phasing_gamma = 1
-    phasing_kmin = 2
-    segmentation_gamma = 20
-    segmentation_kmin = 3
-    normalname = paste0(tumourname, "_normal")
-  }
-  if (analysis == "germline") {
-    calc_seg_baf_option = 1
-    phasing_gamma = 3
-    phasing_kmin = 1
-    segmentation_gamma = 3
-    segmentation_kmin = 3
-  }
-  if (data_type == "wgs" & is.na(ismale)) {
-    stop("Please provide a boolean denominator whether this sample represents a male donor")
-  }
-  if (data_type == "wgs" & is.na(g1000allelesprefix)) {
-    stop("Please provide a path to 1000 Genomes allele reference files")
-  }
-  if (data_type == "wgs" & is.null(gccorrectprefix)) {
-    stop("Please provide a path to GC content reference files")
-  }
-  if (!file.exists(problemloci)) {
-    stop("Please provide a path to a problematic loci file")
-  }
-  if (!file.exists(imputeinfofile)) {
-    stop("Please provide a path to an impute info file")
-  }
-  check.imputeinfofile(imputeinfofile = imputeinfofile, is.male = ismale, 
-                       usebeagle = usebeagle)
-  nsamples <- length(tumourname)
-  if (nsamples > 1) {
-    if (length(skip_allele_counting) < nsamples) {
-      skip_allele_counting = rep(skip_allele_counting[1], 
-                                 nsamples)
-    }
-    if (length(skip_preprocessing) < nsamples) {
-      skip_preprocessing = rep(skip_preprocessing[1], 
-                               nsamples)
-    }
-    if (length(skip_phasing) < nsamples) {
-      skip_phasing = rep(skip_phasing[1], nsamples)
-    }
-  }
-  if (data_type == "wgs" | data_type == "WGS") {
-    if (nsamples > 1) {
-      print(paste0("Running Battenberg in multisample mode on ", 
-                   nsamples, " samples: ", paste0(tumourname, collapse = ", ")))
-    }
-    chrom_names = get.chrom.names(imputeinfofile, ismale, 
-                                  analysis = analysis)
-  }
-  else if (data_type == "snp6" | data_type == "SNP6") {
-    if (nsamples > 1) {
-      stop(paste0("Battenberg multisample mode has not been tested with SNP6 data"))
-    }
-    chrom_names = get.chrom.names(imputeinfofile, TRUE)
-    logr_file = paste(tumourname, "_mutantLogR.tab", sep = "")
-    allelecounts_file = NULL
-  }
-  print(chrom_names)
+                prior_breakpoints_file = NULL, GENOMEBUILD = "hg19", chrom_coord_file = NULL)
+{
   for (sampleidx in 1:nsamples) {
     if (!skip_preprocessing[sampleidx]) {
       if (data_type == "wgs" | data_type == "WGS") {
@@ -136,4 +71,67 @@ bat <- function(analysis = "paired", tumourname, normalname, tumour_data_file,
       gender = infer_gender_birdseed(birdseed_report_file)
       ismale = gender == "male"
     }
+    if (!skip_phasing[sampleidx]) {
+      if (!is.na(externalhaplotypefile) && file.exists(externalhaplotypefile)) {
+        externalhaplotypeprefix <- paste0(normalname, 
+                                          "_external_haplotypes_chr")
+        if (any(!file.exists(paste0(externalhaplotypeprefix, 
+                                    1:length(chrom_names), ".vcf")))) {
+          print(paste0("Splitting external phasing data from ", 
+                       externalhaplotypefile))
+          split_input_haplotypes(chrom_names = chrom_names, 
+                                 externalhaplotypefile = externalhaplotypefile, 
+                                 outprefix = externalhaplotypeprefix)
+        }
+        else {
+          print("No need to split, external haplotype files per chromosome found")
+        }
+      }
+      else {
+        externalhaplotypeprefix <- NA
+      }
+      clp = parallel::makeCluster(nthreads)
+      doParallel::registerDoParallel(clp)
+      foreach::foreach(i = 1:length(chrom_names)) %dopar% 
+        {
+          chrom = chrom_names[i]
+          print(chrom)
+          run_haplotyping(chrom = chrom, tumourname = tumourname[sampleidx], 
+                          normalname = normalname, ismale = ismale, 
+                          imputeinfofile = imputeinfofile, problemloci = problemloci, 
+                          impute_exe = impute_exe, min_normal_depth = min_normal_depth, 
+                          chrom_names = chrom_names, snp6_reference_info_file = snp6_reference_info_file, 
+                          heterozygousFilter = heterozygousFilter, 
+                          usebeagle = usebeagle, beaglejar = beaglejar, 
+                          beagleref = gsub("CHROMNAME", chrom, beagleref.template), 
+                          beagleplink = gsub("CHROMNAME", chrom, beagleplink.template), 
+                          beaglemaxmem = beaglemaxmem, beaglenthreads = beaglenthreads, 
+                          beaglewindow = beaglewindow, beagleoverlap = beagleoverlap, 
+                          externalhaplotypeprefix = externalhaplotypeprefix, 
+                          use_previous_imputation = (sampleidx > 1))
+        }
+      parallel::stopCluster(clp)
+      combine.baf.files(inputfile.prefix = paste(tumourname[sampleidx], 
+                                                 "_chr", sep = ""), inputfile.postfix = "_heterozygousMutBAFs_haplotyped.txt", 
+                        outputfile = paste(tumourname[sampleidx], "_heterozygousMutBAFs_haplotyped.txt", 
+                                           sep = ""), chr_names = chrom_names)
+    }
+    segment.baf.phased(samplename = tumourname[sampleidx], 
+                       inputfile = paste(tumourname[sampleidx], "_heterozygousMutBAFs_haplotyped.txt", 
+                                         sep = ""), outputfile = paste(tumourname[sampleidx], 
+                                                                       ".BAFsegmented.txt", sep = ""), prior_breakpoints_file = prior_breakpoints_file, 
+                       gamma = segmentation_gamma, phasegamma = phasing_gamma, 
+                       kmin = segmentation_kmin, phasekmin = phasing_kmin, 
+                       calc_seg_baf_option = calc_seg_baf_option)
+    if (nsamples > 1 | write_battenberg_phasing) {
+      write_battenberg_phasing(tumourname = tumourname[sampleidx], 
+                               SNPfiles = paste0(tumourname[sampleidx], "_alleleFrequencies_chr", 
+                                                 chrom_names, ".txt"), imputedHaplotypeFiles = paste0(tumourname[sampleidx], 
+                                                                                                      "_impute_output_chr", chrom_names, "_allHaplotypeInfo.txt"), 
+                               bafsegmented_file = paste0(tumourname[sampleidx], 
+                                                          ".BAFsegmented.txt"), outprefix = paste0(tumourname[sampleidx], 
+                                                                                                   "_Battenberg_phased_chr"), chrom_names = chrom_names, 
+                               include_homozygous = F)
+    }
+  }
 }
