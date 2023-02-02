@@ -1,4 +1,4 @@
-bbat <- function(analysis = "paired", tumourname, normalname, tumour_data_file, 
+bat <- function(analysis = "paired", tumourname, normalname, tumour_data_file, 
                 normal_data_file, imputeinfofile, g1000prefix, problemloci, 
                 gccorrectprefix = NULL, repliccorrectprefix = NULL, g1000allelesprefix = NA, 
                 ismale = NA, data_type = "wgs", impute_exe = "impute2", 
