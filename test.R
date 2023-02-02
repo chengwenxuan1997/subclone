@@ -1,24 +1,29 @@
-bat <- function(analysis = "paired", tumourname, normalname, tumour_data_file, 
-                normal_data_file, imputeinfofile, g1000prefix, problemloci, 
-                gccorrectprefix = NULL, repliccorrectprefix = NULL, g1000allelesprefix = NA, 
-                ismale = NA, data_type = "wgs", impute_exe = "impute2", 
-                allelecounter_exe = "alleleCounter", nthreads = 8, platform_gamma = 1, 
-                phasing_gamma = 1, segmentation_gamma = 10, segmentation_kmin = 3, 
-                phasing_kmin = 1, clonality_dist_metric = 0, ascat_dist_metric = 1, 
-                min_ploidy = 1.6, max_ploidy = 4.8, min_rho = 0.1, min_goodness = 0.63, 
-                uninformative_BAF_threshold = 0.51, min_normal_depth = 10, 
-                min_base_qual = 20, min_map_qual = 35, calc_seg_baf_option = 3, 
-                skip_allele_counting = F, skip_preprocessing = F, skip_phasing = F, 
-                externalhaplotypefile = NA, usebeagle = FALSE, beaglejar = NA, 
-                beagleref.template = NA, beagleplink.template = NA, beaglemaxmem = 10, 
-                beaglenthreads = 1, beaglewindow = 40, beagleoverlap = 4, 
-                javajre = "java", write_battenberg_phasing = T, multisample_relative_weight_balanced = 0.25, 
-                multisample_maxlag = 100, segmentation_gamma_multisample = 5, 
-                snp6_reference_info_file = NA, apt.probeset.genotype.exe = "apt-probeset-genotype", 
-                apt.probeset.summarize.exe = "apt-probeset-summarize", norm.geno.clust.exe = "normalize_affy_geno_cluster.pl", 
-                birdseed_report_file = "birdseed.report.txt", heterozygousFilter = "none", 
-                prior_breakpoints_file = NULL, GENOMEBUILD = "hg19", chrom_coord_file = NULL)
+bbat <- function(analysis = "paired", tumourname, normalname, tumour_data_file, 
+                 normal_data_file, imputeinfofile, g1000prefix, problemloci, 
+                 gccorrectprefix = NULL, repliccorrectprefix = NULL, g1000allelesprefix = NA, 
+                 ismale = NA, data_type = "wgs", impute_exe = "impute2", 
+                 allelecounter_exe = "alleleCounter", nthreads = 8, platform_gamma = 1, 
+                 phasing_gamma = 1, segmentation_gamma = 10, segmentation_kmin = 3, 
+                 phasing_kmin = 1, clonality_dist_metric = 0, ascat_dist_metric = 1, 
+                 min_ploidy = 1.6, max_ploidy = 4.8, min_rho = 0.1, min_goodness = 0.63, 
+                 uninformative_BAF_threshold = 0.51, min_normal_depth = 10, 
+                 min_base_qual = 20, min_map_qual = 35, calc_seg_baf_option = 3, 
+                 skip_allele_counting = F, skip_preprocessing = F, skip_phasing = F, 
+                 externalhaplotypefile = NA, usebeagle = FALSE, beaglejar = NA, 
+                 beagleref.template = NA, beagleplink.template = NA, beaglemaxmem = 10, 
+                 beaglenthreads = 1, beaglewindow = 40, beagleoverlap = 4, 
+                 javajre = "java", write_battenberg_phasing = T, multisample_relative_weight_balanced = 0.25, 
+                 multisample_maxlag = 100, segmentation_gamma_multisample = 5, 
+                 snp6_reference_info_file = NA, apt.probeset.genotype.exe = "apt-probeset-genotype", 
+                 apt.probeset.summarize.exe = "apt-probeset-summarize", norm.geno.clust.exe = "normalize_affy_geno_cluster.pl", 
+                 birdseed_report_file = "birdseed.report.txt", heterozygousFilter = "none", 
+                 prior_breakpoints_file = NULL, GENOMEBUILD = "hg19", chrom_coord_file = NULL)
 {
+  requireNamespace("foreach")
+  requireNamespace("doParallel")
+  requireNamespace("parallel")
+  nsamples <- length(tumourname)
+  
   for (sampleidx in 1:nsamples) {
     if (!skip_preprocessing[sampleidx]) {
       if (data_type == "wgs" | data_type == "WGS") {
